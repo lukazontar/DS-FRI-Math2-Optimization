@@ -188,5 +188,23 @@ class NelderMeadOptimizer():
         # Set initial distances to 1 and 0 on diagonal
         tetrahedron = np.ones([self.n, self.n]) - np.diag(np.ones(self.n))
         tetrahedron = tetrahedron / np.sqrt(self.n - 1) * diameter
-
+        # Return points that are away from the origin, where distance is: sqrt((n-1)*sqrt((n-1) * diameter))
         return np.vstack([x_origin, x_origin + tetrahedron])
+
+
+
+def cost_function_1(sample_points):
+    x = sample_points[0]
+    y = sample_points[1]
+    z = sample_points[2]
+
+    return (x - z) ** 2 + (2 * y + z) ** 2 + (4 * x - 2 * y + z) ** 2 + x + y
+
+x_origin = np.zeros(3)
+x_true = np.array([-1 / 6, -11 / 48, 1 / 6])
+nm_optimizer = NelderMeadOptimizer(x_origin=x_origin,
+                                   diameter=2,
+                                   f_cost=cost_function_1,
+                                   x_true=x_true,
+                                   max_iter=10000)
+nm_optimizer.minimize()

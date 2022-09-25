@@ -45,32 +45,55 @@ class InteriorPointMethodMinimizer():
         if np.linalg.matrix_rank(self.A) < self.m and self.verbose > 0:
             print("\nMatrix A does not have full rank\n")
 
-        # Define global variables: U, W, R, M, d, e, rho, delta
+        # Define variable that help derive the initial solution:
+
+        # Primal problem (P')
+        # min c.T @ x + M * x_(n+2) subject to
+        #         (1) A @ x + rho @ x_(n+2) = d
+        #         (2) e.T @ x + x_(n+1) + x_(n+1) = n + 2
+        #
+        # Dual problem (D')
+        # max d.T @ y + (n + 2) * y_(m+1)
+        #         (1) A.T @ y + e.T
+
+        # U >= a_ij, b_i, c_j for all i_j
         self.U = max(np.max(np.abs(self.A / norm_integer)), np.max(np.abs(self.b / norm_integer)),
                      np.max(np.abs(self.c / norm_integer)))
+        # If the original problem is feasible then there is a feasible solution such that all coordinates are
+        # bounded by W. Additionally if problem is bounded than this solution is optimal.
         self.W = (self.m * self.U) ** self.m
-        self.R = 1 / ((self.W ** 2) * (2 * self.n * ((self.m + 1) * self.U) ** (3 * (self.m + 1))))
-        self.M = 4 * self.n * self.U / self.R
+        # Derived from (P)(1)
         self.d = ((self.b / norm_integer) / self.W).reshape(-1, 1)
+        # Simple unit vector
         self.e = np.ones(shape=(self.n, 1))
+        # Derived from (P)(1)
         self.rho = self.d - (self.A / norm_integer) @ self.e
+        # Derivation from Claim 6
         self.delta = 1 / (8 * np.sqrt(self.n + 2))
 
-        # Set the prime(') problem
+        # Choice of M
+        self.R = 1 / ((self.W ** 2) * (2 * self.n * ((self.m + 1) * self.U) ** (3 * (self.m + 1))))
+        self.M = 4 * self.n * self.U / self.R
+
+        # Follows from (P') - left-hand side
         self.A_prime = np.block([
             [A, np.zeros(shape=(self.m, 1)), self.rho],
             [self.e.T, 1, 1],
         ])
+        # Right-hand side of the (P')
         self.b_prime = np.block([
             [self.d],
             [self.n + 2]
         ])
+        # (n + 2)-dim vector of ones
         self.e_prime = np.ones(shape=(self.A_prime.shape[1], 1))
 
         # Set the initial feasible solution x_0, y_0, s_0, mu_0
         # Set initial mu_0
+        # Follows from calculation of sigma^2 (deviation of x_i * s_i)
         self.mu_i = 2 * (np.square(self.M) + np.sum(
             np.square(self.c))) ** 0.5  # 2 * np.sqrt(M ** 2 + np.sum(c ** 2))
+
 
         self.c = self.c.reshape(-1, 1)
 
@@ -94,6 +117,10 @@ class InteriorPointMethodMinimizer():
     def iterative_improvement(self):
         """
         Make a single step of the iterative improvement process.
+        Solving system (S), where:
+            A @ h=0
+            A.T @ k + f = 0
+            x_i * f_i + s_i * h_i = mu_i - x_i * s_i
         """
         # Construct diagonal matrices X, S and the inverse of S
         X = np.diag(self.x_i.reshape(-1))
@@ -140,6 +167,8 @@ class InteriorPointMethodMinimizer():
 
         # Set B - index set where slack variables are 0
         B = list(filter(lambda x: x < self.n, np.argwhere(s_optimal.flatten() == 0).flatten()))
+        # Set N - index set where slack variables are 0
+        N = list(filter(lambda x: x < self.n, np.argwhere(x_optimal.flatten() == 0).flatten()))
 
         # Solve the system of A_B @ x_B_optimal = b and set solution to optimal x at indices B.
         A_B_inv = np.linalg.pinv(self.A[:, B])
